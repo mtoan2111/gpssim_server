@@ -1,16 +1,40 @@
+#ifdef _WIN32_
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <conio.h>
 #include <WinSock2.h>
+#else
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <math.h>
+#include <stdbool.h>
+#include <sys/stat.h>
+#endif
 
 int USER_MOTION = 3000;
+
 #define MAX_LEN 100
 #define WGS84_RADIUS 6378137.0
 #define WGS84_ECCENTRICITY 0.0818191908426
 #define V_MAX 27.7
 #define R2D 57.2957795131
+
+void error(char *msg)
+{
+  perror(msg);
+  exit(1);
+}
+
 
 void subVect(double *A1, double *A2, double *result)
 {
@@ -295,6 +319,7 @@ double **createBuff(int i, int j)
 
 int main(int argc, char *argv)
 {
+#ifdef _WIN32_
   int ret;
   WSADATA data;
   ret = WSAStartup(MAKEWORD(2, 2), &data);
@@ -319,6 +344,29 @@ int main(int argc, char *argv)
   }
   //--> Open queue
   listen(s, 10);
+#else
+//  int s,c;
+//  int port = 8080;
+//  s = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+//  if (s < 0)
+//  {
+//    error("ERROR: opening socket");
+//  }
+// 
+//  struct sockaddr_in sAddr;
+//  sAddr.sin_family = AF_INET;
+//  sAddr.sin_port = htons(8080);
+//  sAddr.sin_addr.s_addr = INADDR_ANY;
+//
+//  int ret = bind(s,(struct sockaddr*)&sAddr,sizeof(sAddr));
+//  if (ret < 0)
+//  {
+//    error("ERROR on binding");
+//  }
+//  listen(s,10);
+
+#endif
+
   FILE *in;
   FILE *out;
   FILE *out_llh;
@@ -331,11 +379,11 @@ int main(int argc, char *argv)
   double **neu_new;
   double **llh_wrong;
   float tp;
-  char *input_source = "D:/GitReposities/gps-sdr-sim/simulator.csv";
-  char *output_source = "D:/GitReposities/gps-sdr-sim/spoof.csv";
-  char *output_llh_source = "D:/GitReposities/gps-sdr-sim/out_llh.csv";
-  char *output_neu_source = "D:/GitReposities/gps-sdr-sim/out_neu.csv";
-  char *output_llh_wrong = "D:/GitReposities/gps-sdr-sim/spoof_llh.csv";
+  char *input_source = "/home/pi/simulator.csv";
+  char *output_source = "/home/pi/spoof.csv";
+  char *output_llh_source = "/home/pi/mout_llh.csv";
+  char *output_neu_source = "/home/pi/out_neu.csv";
+  char *output_llh_wrong = "/home/pi/spoof_llh.csv";
   in = fopen(input_source, "r");
   out = fopen(output_source, "wb");
   out_llh = fopen(output_llh_source, "wb");
@@ -396,55 +444,68 @@ int main(int argc, char *argv)
     tp = tp + (0.1 * 10) / 10.0;
   }
   //waiting client connect
+#ifdef _WIN32_
   int len = sizeof(Caddr);
   printf("Waiting client connect\n");
-  c = accept(s, (sockaddr *)&Caddr, &len);
+#else
+//  struct sockaddr_in Caddr;
+//  int clen = sizeof(Caddr);
+#endif
+//  c = accept(s, (struct sockaddr *)&Caddr, &clen);
   //-->send first xyz to calculate tmat, neu
   printf("Success!\n");
   char fist_mess[100];
   char ok_mess[8];
   sprintf(fist_mess, "%.3lf, %.3lf, %.3lf\n", llh_wrong[0][0], llh_wrong[0][1], llh_wrong[0][2]);
-  ret = recv(c, ok_mess, sizeof(ok_mess), 0);
-  if (ret == -1)
-  {
-    printf("Error 3!\n");
-    return 0;
-  }
-  else
-  {
-    if (strcmp(ok_mess, "ok") == 0)
-    {
-      send(c, fist_mess, sizeof(fist_mess), 0);
-    }
-  }
+//  ret = recv(c, ok_mess, sizeof(ok_mess), 0);
+//  if (ret == -1)
+//  {
+//    printf("Error 3!\n");
+//    return 0;
+//  }
+//  else
+//  {
+//    if (strcmp(ok_mess, "ok") == 0)
+//    {
+//      send(c, fist_mess, sizeof(fist_mess), 0);
+//    }
+//  }
   //-->send data
+  FILE *fd;
+  char *myfifo = "/tmp/test";
+  //mkfifo (myfifo,0666);
+  fd = fopen(myfifo, "w");
   for (int i = 0; i < USER_MOTION; i++)
   {
     char buff[100];
     char ok[8];
     sprintf(buff, "%.3lf, %.3lf, %.3lf\n", xyz_wrong[i][0], xyz_wrong[i][1], xyz_wrong[i][2]);
-    ret = recv(c, ok, sizeof(ok), 0);
-    if (ret == -1)
-    {
-      printf("Error 3!\n");
-      return 0;
-    }
-    else
-    {
-      if (strncmp(ok, "OK",2) == 0)
-      {
-        printf("%s\n", buff);
-        send(c, buff, sizeof(buff), 0);
-      }
-    }
+    //printf("%s",buff);
+    fwrite(buff,strlen(buff),1,fd);
+//    ret = recv(c, ok, sizeof(ok), 0);
+//    if (ret == -1)
+//    {
+//      printf("Error 3!\n");
+//      return 0;
+//    }
+//    else
+//    {
+//      if (strncmp(ok, "OK",2) == 0)
+//      {
+//        //printf("%s\n", buff);
+//        send(c, buff, sizeof(buff), 0);
+//      }
+//    }
   }
-  closesocket(c);
+  fclose(fd);
+  //unlink(myfifo);
+  //close(c);
   fclose(in);
   fclose(out);
   fclose(out_llh);
   fclose(out_neu);
   fclose(out_llh_wrong);
   //-->save coordinates
-  _getch();
+  // _getch();
   return 0;
 }
