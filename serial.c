@@ -129,7 +129,7 @@ static void *SerialThreadHandle(void *param)
     ret = poll(&ufds,1,POLL_TIMEOUT);
     if (ret > 0)
     {
-      count = SerialRead(tty,rx_buff,38);
+      count = SerialRead(tty,rx_buff,39);
       if (count > 0)
       {
         //printf("\n%d\n",count);
@@ -198,7 +198,7 @@ int configSerialPort(int fd, int speed, int parity)
   return 0;
 }
 
-void set_blocking (int fd, int should_block)
+void MinByteReceiver (int fd, int min)
 {
   struct termios tty;
   memset (&tty, 0, sizeof tty);
@@ -208,7 +208,7 @@ void set_blocking (int fd, int should_block)
     return;
   }
 
-  tty.c_cc[VMIN]  = should_block ? 1 : 0;
+  tty.c_cc[VMIN]  = min;
   tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
   tcflush(fd, TCIFLUSH);
@@ -273,6 +273,20 @@ int main(void)
   /*
 TODO: Need a handshake protocol before start reading thread
   */
+  MinByteReceiver(fd, 1);
+  char *buff = "Nguyen Manh Toan";
+  //write (fd, buff, strlen(buff));
+  while(1)
+  {
+    unsigned char ACK = 'U';
+    unsigned char rd_buff[8];
+    memset(rd_buff,0x00,sizeof(rd_buff));
+    write(fd,&ACK,1);
+    int ret = read (fd, rd_buff, 1);
+    if (rd_buff[0] == ACK)
+      break;
+  }
+  MinByteReceiver(fd,39);
   int res = SerialStart(&my_tty);
   while(1)
   {
