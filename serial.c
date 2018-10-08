@@ -9,26 +9,9 @@
 #include <signal.h>
 #include <poll.h>
 
-#define POLL_TIMEOUT 2000
-//--> Implement queue
-typedef struct LatLong
-{
-  double lat6;
-  double lon6;
-  double lat7;
-  double lon7;
-}llh;
+#include "serial.h"
 
-typedef struct QNote
-{
-  llh data;
-  struct QNote *next;
-}QNote;
-
-typedef struct Queue
-{
-  QNote *front, *rear;
-}Queue;
+Queue *q = NULL;
 
 QNote *newNote(llh data)
 {
@@ -68,18 +51,6 @@ QNote *deQueue(Queue *q)
   return tmp;
 }
 
-Queue *q = NULL;
-//<-- Complete implement Q
-
-//
-
-typedef struct serial_t
-{
-  int fd;
-  int state;
-  int running;
-  pthread_t rx_thread;
-}serial;
 
 static int SerialStop(serial *tty)
 {
@@ -158,19 +129,19 @@ static void *SerialThreadHandle(void *param)
   return NULL;
 }
 
-int configSerialPort(int fd, int speed, int parity)
+int ConfigSerialPort(int fd, int speed, int parity)
 {
   struct termios tty;
   memset(&tty, 0, sizeof(tty));
   if (tcgetattr(fd, &tty) != 0)
   {  
-    printf("\n Error! in getting attributes\n");
+    printf("Error! in getting attributes\n");
     printf("%s\n",strerror(errno));
     return -1;
   }
   else
   {
-    printf("\n Get attr success\n");
+    printf("Get attr success\n");
   }
   cfsetospeed(&tty,speed);
   cfsetispeed(&tty,speed);
@@ -192,19 +163,19 @@ int configSerialPort(int fd, int speed, int parity)
   tcflush(fd, TCIFLUSH);
   if (tcsetattr(fd, TCSANOW, &tty) != 0)
   {
-    printf("\nError! in setting attributes\n");
+    printf("Error! in setting attributes\n");
     return -1;
   }
   return 0;
 }
 
-void MinByteReceiver (int fd, int min)
+void ByteRate (int fd, int min)
 {
   struct termios tty;
   memset (&tty, 0, sizeof tty);
   if (tcgetattr (fd, &tty) != 0)
   {
-    printf("error %d from tggetattr", errno);
+    printf("Error %d from tggetattr", errno);
     return;
   }
 
@@ -234,68 +205,16 @@ static int SerialStart(serial *tty)
   }
 }
 
-int main(void)
+void HandShake(int fd)
 {
-  int fd;
-  char *tty="/dev/ttyACM0";
-  fd = open(tty,O_RDWR| O_NOCTTY);
-  if (fd == 1)
-  {
-    printf("\n Error! in opening Arduino Serial Port\n");
-  }
-  else
-  {
-    printf("\n Arduino Serial port is opening\n");
-  }
-  if(configSerialPort(fd,B115200,0) != 0)
-    return 0;
-//  set_blocking(fd, 1);
-//  char *buff = "Nguyen Manh Toan";
-//  //write (fd, buff, strlen(buff));
-//  while(1)
-//  {
-//    char rd_buff[1024];
-//    memset(rd_buff,0x00,sizeof(rd_buff));
-//    int ret = read (fd, rd_buff, 38);
-//    printf ("%d\n",ret);
-//    printf ("%s\n",rd_buff);
-//  }
-//  close(fd);
-  q = createQueue();
-  pthread_t tThread; 
-  serial my_tty = {
-    .fd = fd,
-    .state = -1,
-    .running = -1,
-    .rx_thread = tThread
-
-  };
-  /*
-TODO: Need a handshake protocol before start reading thread
-  */
-  MinByteReceiver(fd, 1);
-  char *buff = "Nguyen Manh Toan";
-  //write (fd, buff, strlen(buff));
   while(1)
   {
-    unsigned char ACK = 'U';
-    unsigned char rd_buff[8];
-    memset(rd_buff,0x00,sizeof(rd_buff));
-    write(fd,&ACK,1);
-    int ret = read (fd, rd_buff, 1);
-    if (rd_buff[0] == ACK)
-      break;
+    unsigned char ACK='U';
+    unsigned char rd[1<<3];
+    memset(rd,0x00, sizeof(rd));
+    int ret = write(fd,&ACK,1);
+    ret = read (fd, rd,1);
+    if (rd[0] == ACK)
+      return;
   }
-  MinByteReceiver(fd,39);
-  int res = SerialStart(&my_tty);
-  while(1)
-  {
-    QNote *tmp = NULL;
-    if ((tmp = deQueue(q)) != NULL)
-    {
-      printf("%f,%f,%f,%f\n",tmp->data.lat6,tmp->data.lon6,tmp->data.lat7,tmp->data.lon7);
-    }
-  }
-  close(fd);
-  return 0;
 }
