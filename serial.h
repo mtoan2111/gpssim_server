@@ -42,7 +42,7 @@ static void UART_IRQ(char *buff);
 static void *SerialThreadHandle(void *param);
 int ConfigSerialPort(int fd, int speed, int parity);
 void ByteRate(int fd, int min);
-static int SerialStart(serial *tty);
+int SerialStart(serial *tty);
 void HandShake(int fd);
 
 #endif

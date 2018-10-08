@@ -187,7 +187,7 @@ void ByteRate (int fd, int min)
     printf("error %d setting term attributes", errno);
 }
 
-static int SerialStart(serial *tty)
+int SerialStart(serial *tty)
 {
   if (tty->running != 1)
   {

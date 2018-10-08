@@ -358,7 +358,6 @@ int main(int argc, const char **argv)
     printf ("Error! Missing Serial Module File\n");
     return 0;
   }
-  //printf ("%s",argv[1]);
   char tty[1<<4];
   strcpy(tty, argv[1]);
   fd = open (tty, O_RDWR | O_NOCTTY);
@@ -373,15 +372,15 @@ int main(int argc, const char **argv)
     printf("Arduino Serial port is opening\n");
   }
   if(ConfigSerialPort(fd,B115200,0) != 0)
-//    return 0;
+    return 0;
   q = createQueue();
-//  pthread_t tThread; 
-//  serial my_tty = {
-//    .fd = fd,
-//    .state = -1,
-//    .running = -1,
-//    .rx_thread = tThread
-//  };
+  pthread_t tThread; 
+  serial my_tty = {
+    .fd = fd,
+    .state = -1,
+    .running = -1,
+    .rx_thread = tThread
+  };
 /*
 TODO: Need a handshake protocol
 */
@@ -389,12 +388,21 @@ TODO: Need a handshake protocol
   printf ("Handshaking....\n");
   HandShake(fd); 
   printf ("Handshake succeed\n");
-//  while(1)
-//  {
-//    char *bu = "Nguyen Manh toan";
-//    write(fd, &bu, strlen(bu));
-//  }
-
+  //......
+  ByteRate(fd,39);
+  int res = SerialStart(&my_tty);
+  if (res < 0)
+    return 0;
+  while(1)
+  {
+    QNote *tmp = NULL;
+    if ((tmp = deQueue(q)) != NULL)
+    {
+      /*
+      Capture data and calculating...
+      */
+    }
+  }
 /**
   FILE *in;
   FILE *out;

@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -g -O3 -lm -lpthread
 
-all: server.o serial.o
+all: serial.o server.o
 	$(CC) server.o serial.o $(CFLAGS) -o server
 	rm -f *.o
 clean:
