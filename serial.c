@@ -73,9 +73,7 @@ int SerialRead(serial *tty,char *buff, int size)
 static void UART_IRQ(char *buff)
 {
   llh tmp;
-//  printf ("%d   ", strlen(buff));
-//  printf ("\n%s\n",buff);
-  sscanf(buff,"%lf,%lf,%lf,%lf",&tmp.lat6, &tmp.lon6, &tmp.lat7, &tmp.lon7);
+  sscanf(buff,"%lf,%lf,%lf,%lf,%lf,%lf",&tmp.lat6, &tmp.lon6, &tmp.alt6, &tmp.lat7, &tmp.lon7, &tmp.alt7);
   enQueue(q, tmp);
 }
 
@@ -85,7 +83,7 @@ static void *SerialThreadHandle(void *param)
   int ret = 0;
   int err = -1;
   int count = 0;
-  char rx_buff[64];
+  char rx_buff[1 << 6];
   int blen = sizeof(rx_buff);
 
   serial *tty = (serial*)param;
@@ -100,12 +98,82 @@ static void *SerialThreadHandle(void *param)
     ret = poll(&ufds,1,POLL_TIMEOUT);
     if (ret > 0)
     {
-      count = SerialRead(tty,rx_buff,39);
+      //clear buffer
+      memset(rx_buff, 0x00, blen);
+      //Reading the number of bytes will be recv
+      count = SerialRead(tty,rx_buff,2);
       if (count > 0)
       {
         //printf("\n%d\n",count);
         rx_buff[count] = '\0';
-        UART_IRQ(rx_buff);
+        int cRecv = atoi(rx_buff);
+#ifdef DEBUG
+        printf ("Size of buff   -->%d\n", cRecv);
+#endif
+        //clear buffer
+        memset(rx_buff,0x00, blen);
+        //handshake
+        //HandShake(fd);
+        ByteRate(fd,cRecv);
+        ret = poll(&ufds,1,POLL_TIMEOUT);
+        if (ret > 0)
+        {
+          count = SerialRead(tty,rx_buff,cRecv);
+#ifdef DEBUG
+          printf ("First buff     -->%d   : %s\n", count, rx_buff);
+#endif
+          int clen = strlen(rx_buff);
+          if (count > 0)
+          {
+            if (clen < cRecv)
+            {
+              //transfer doesn't complete
+              char tmp_buff[1 << 6] = {0,};
+              ByteRate(fd,cRecv - clen);
+              ret = poll(&ufds,1,POLL_TIMEOUT);
+              if (ret > 0)
+              {
+                count = SerialRead(tty,tmp_buff,cRecv - clen);
+                if (count > 0)
+                {
+                  tmp_buff[count] = '\0';
+                  //concatenate string
+                  strncat(rx_buff,tmp_buff,strlen(tmp_buff));
+#ifdef   DEBUG
+                  printf ("Next buff      -->%d   : %s\n", count, tmp_buff);
+                  printf ("Complete buff  -->%d   : %s\n", count, rx_buff);
+#endif
+                }
+                else if (count < 0)
+                {
+                  printf("\nError! Connection fail");
+                  err = 1;
+                  break;
+                }
+              }
+              else if (ret < 0)
+              {
+                printf("\nError! Polling error in serial thread");
+                err = 1;
+                break;
+              } 
+            }
+          }
+          else if (count < 0)
+          {
+            printf("\nError! Connection fail");
+            err = 1;
+            break;
+
+          }
+          UART_IRQ(rx_buff);
+        }
+        else if (ret < 0)
+        {
+          printf("\nError! Polling error in serial thread");
+          err = 1;
+          break;
+        } 
       }
       else if (count < 0)
       {
@@ -207,12 +275,13 @@ int SerialStart(serial *tty)
 
 void HandShake(int fd)
 {
+  unsigned char ACK='U';
+  unsigned char rd[1<<3];
   while(1)
   {
-    unsigned char ACK='U';
-    unsigned char rd[1<<3];
     memset(rd,0x00, sizeof(rd));
     int ret = write(fd,&ACK,1);
+    ByteRate(fd,1);
     ret = read (fd, rd,1);
     if (rd[0] == ACK)
       return;

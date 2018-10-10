@@ -27,7 +27,8 @@
 
 #include "serial.h"
 #include <termios.h>
-int USER_MOTION = 3000;
+
+int USER_MOTION = 3;
 
 #define MAX_LEN 100
 #define WGS84_RADIUS 6378137.0
@@ -83,9 +84,11 @@ double detectDirection(double *A, double *B, double *C)
   {
     cosABC = -1;
   }
-//{
-//	printf("%lf \n", acos(cosABC) * R2D);
-//}
+#ifdef DEBUG
+{
+	printf("%lf \n", acos(cosABC) * R2D);
+}
+#endif
   return (acos(cosABC)*R2D);
 }
 
@@ -184,6 +187,40 @@ void xyz2llh(double **xyz, double **llh)
   return;
 }
 
+void llh2xyz(const double *llh, double *xyz)
+{
+  double n;
+  double a;
+  double e;
+  double e2;
+  double clat;
+  double slat;
+  double clon;
+  double slon;
+  double d,nph;
+  double tmp;
+
+  a = WGS84_RADIUS;
+  e = WGS84_ECCENTRICITY;
+  e2 = e*e;
+
+  clat = cos(llh[0]);
+  slat = sin(llh[0]);
+  clon = cos(llh[1]);
+  slon = sin(llh[1]);
+  d = e*slat;
+
+  n = a/sqrt(1.0-d*d);
+  nph = n + llh[2];
+
+  tmp = nph*clat;
+  xyz[0] = tmp*clon;
+  xyz[1] = tmp*slon;
+  xyz[2] = ((1.0-e2)*n + llh[2])*slat;
+
+  return;
+}
+
 void tmat(double *llh, double t[3][3])
 {
   double slat, clat;
@@ -260,7 +297,7 @@ void calWrongNeu( double **xyz_wrong, double **xyz, double **llh)
         //drones redirected
         double subN = xyz[num][0] - xyz[num - 1][0];
         double subE = xyz[num][1] - xyz[num - 1][1];
-        /*		N
+        /*	N
         IV  |  I
         --------- E
         III |  II
@@ -323,6 +360,36 @@ double **createBuff(int i, int j)
   return array;
 }
 
+double llh6[3][3];
+double llh7[3][3];
+double neu[3][3];
+
+void ReplaceData(double A[3], double B[3])
+{
+  A[0] = B[0];
+  A[1] = B[1];
+  A[2] = B[2];
+}
+
+void PushBuff(QNote *tmp)
+{
+  double llh6_tmp[] = {tmp->data.lat6, tmp->data.lon6, tmp->data.alt6};
+  double llh7_tmp[] = {tmp->data.lat7, tmp->data.lon7, tmp->data.alt7};
+  double xyz6[3];
+  double xyz7[3];
+  llh2xyz(llh6_tmp,xyz6);
+  llh2xyz(llh7_tmp,xyz7);
+  ReplaceData(llh6[0], llh6[1]);
+  ReplaceData(llh6[1], llh6[2]);
+  ReplaceData(llh7[0], llh7[1]);
+  ReplaceData(llh7[1], llh7[2]);
+  llh6[2][0] = xyz6[0];
+  llh6[2][1] = xyz6[1]; 
+  llh6[2][2] = xyz6[2];
+  llh7[2][0] = xyz7[0];
+  llh7[2][1] = xyz7[1];
+  llh7[2][2] = xyz7[2];
+}
 
 int main(int argc, const char **argv)
 {
@@ -361,7 +428,9 @@ int main(int argc, const char **argv)
   char tty[1<<4];
   strcpy(tty, argv[1]);
   fd = open (tty, O_RDWR | O_NOCTTY);
+#ifdef DEBUG  
   printf ("%d",fd);
+#endif
   if (fd < 0)
   {
     printf("Error! in opening Arduino Serial Port\n");
@@ -389,20 +458,42 @@ TODO: Need a handshake protocol
   HandShake(fd); 
   printf ("Handshake succeed\n");
   //......
-  ByteRate(fd,39);
+  ByteRate(fd,61);
   int res = SerialStart(&my_tty);
   if (res < 0)
     return 0;
+  int count = 0;
+#ifdef DEBUG
+  while(1)
+  {
+  }
+#else
+  //Read 3 packages first
+  while(count++ < 3)
+  {
+    QNote *tmp = NULL;
+    if ((tmp = deQueue(q)) != NULL)
+    {
+      PushBuff(tmp);
+    }
+  }
   while(1)
   {
     QNote *tmp = NULL;
     if ((tmp = deQueue(q)) != NULL)
     {
-      /*
+     /*
       Capture data and calculating...
-      */
+     */
+      
+     //Step1: Convert lat, lon, hgt to xyz and push to buffer
+      PushBuff(tmp);
+     //Step2: Convert xyz to neu
+      printf ("%lf,%lf,%lf,%lf,%lf,%lf\n",llh6[2][0], llh6[2][1], llh6[2][2], llh7[2][0], llh7[2][1], llh7[2][2]);
+//      printf ("%lf,%lf,%lf,%lf,%lf,%lf\n", tmp->data.lat6, tmp->data.lon6, tmp->data.alt6, tmp->data.lat7, tmp->data.lon7, tmp->data.alt7);
     }
   }
+#endif
 /**
   FILE *in;
   FILE *out;

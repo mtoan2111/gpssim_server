@@ -7,8 +7,10 @@ typedef struct LatLong
 {
   double lat6;
   double lon6;
+  double alt6;
   double lat7;
   double lon7;
+  double alt7;
 }llh;
 
 typedef struct QNote
