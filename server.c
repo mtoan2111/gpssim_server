@@ -36,6 +36,15 @@ int USER_MOTION = 3;
 #define V_MAX 27.7
 #define R2D 57.2957795131
 
+
+double xyz6[3][3];
+double xyz7[3][3];
+double llh6[3][3];
+double llh7[3][3];
+double neu6[3][3];
+double neu7[3][3];
+
+
 void error(char *msg)
 {
   perror(msg);
@@ -360,10 +369,6 @@ double **createBuff(int i, int j)
   return array;
 }
 
-double llh6[3][3];
-double llh7[3][3];
-double neu[3][3];
-
 void ReplaceData(double A[3], double B[3])
 {
   A[0] = B[0];
@@ -373,22 +378,22 @@ void ReplaceData(double A[3], double B[3])
 
 void PushBuff(QNote *tmp)
 {
-  double llh6_tmp[] = {tmp->data.lat6, tmp->data.lon6, tmp->data.alt6};
-  double llh7_tmp[] = {tmp->data.lat7, tmp->data.lon7, tmp->data.alt7};
-  double xyz6[3];
-  double xyz7[3];
-  llh2xyz(llh6_tmp,xyz6);
-  llh2xyz(llh7_tmp,xyz7);
   ReplaceData(llh6[0], llh6[1]);
   ReplaceData(llh6[1], llh6[2]);
   ReplaceData(llh7[0], llh7[1]);
   ReplaceData(llh7[1], llh7[2]);
-  llh6[2][0] = xyz6[0];
-  llh6[2][1] = xyz6[1]; 
-  llh6[2][2] = xyz6[2];
-  llh7[2][0] = xyz7[0];
-  llh7[2][1] = xyz7[1];
-  llh7[2][2] = xyz7[2];
+  ReplaceData(xyz6[0], xyz6[1]);
+  ReplaceData(xyz6[1], xyz6[2]);
+  ReplaceData(xyz7[0], xyz7[1]);
+  ReplaceData(xyz7[1], xyz7[2]);
+  llh6[2][0] = tmp->data.lat6;
+  llh6[2][1] = tmp->data.lon6;
+  llh6[2][2] = tmp->data.alt6;
+  llh7[2][0] = tmp->data.lat7;
+  llh7[2][1] = tmp->data.lon7;
+  llh7[2][2] = tmp->data.alt7;
+  llh2xyz(llh6[2],xyz6[2]);
+  llh2xyz(llh7[2],xyz7[2]);
 }
 
 int main(int argc, const char **argv)
@@ -489,8 +494,8 @@ TODO: Need a handshake protocol
      //Step1: Convert lat, lon, hgt to xyz and push to buffer
       PushBuff(tmp);
      //Step2: Convert xyz to neu
-      printf ("%lf,%lf,%lf,%lf,%lf,%lf\n",llh6[2][0], llh6[2][1], llh6[2][2], llh7[2][0], llh7[2][1], llh7[2][2]);
-//      printf ("%lf,%lf,%lf,%lf,%lf,%lf\n", tmp->data.lat6, tmp->data.lon6, tmp->data.alt6, tmp->data.lat7, tmp->data.lon7, tmp->data.alt7);
+     // xyz2neu(
+      printf ("%lf,%lf,%lf,%lf,%lf,%lf\n",xyz6[2][0], xyz6[2][1], xyz6[2][2], xyz7[2][0], xyz7[2][1], xyz7[2][2]);
     }
   }
 #endif
