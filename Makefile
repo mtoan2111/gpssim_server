@@ -7,6 +7,10 @@ ifdef DEBUG
 CFLAGS += -DDEBUG=1
 endif
 
+ifdef DEBUG_SERVER
+CFLAGS += -DDEBUG_SERVER=1
+endif
+
 .PHONY: all clean
 all: serial.o server.o
 	@$(CC) server.o serial.o $(CFLAGS) -o server

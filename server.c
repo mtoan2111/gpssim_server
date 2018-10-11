@@ -33,7 +33,7 @@ int USER_MOTION = 3;
 #define MAX_LEN 100
 #define WGS84_RADIUS 6378137.0
 #define WGS84_ECCENTRICITY 0.0818191908426
-#define V_MAX 27.7
+#define V_MAX 4.17 //m/s ~ 15 km/h
 #define R2D 57.2957795131
 
 
@@ -73,6 +73,28 @@ bool isSimillar(double *A, double *B)
 double normVect(double *A)
 {
   return sqrt(pow(A[0], 2) + pow(A[1], 2) + pow(A[2], 2));
+}
+
+void velVector(double *A, double *B, double *C)
+{
+  C[0] = B[0] - A[0];
+  C[1] = B[1] - A[1];
+  C[2] = B[2] - A[2];
+  double n = normVect(C);
+  double sV = sqrt(V_MAX);
+  C[0] *= sV/n;
+  C[1] *= sV/n;
+  C[2] *= sV/n;
+}
+
+void nextCoordinate(double *A, double *B, double *D)
+{
+  double tmin = 0.1;
+  double C[3];
+  velVector(A, B, C);
+  D[0] = B[0] + C[0] * tmin;
+  D[1] = B[1] + C[1] * tmin;
+  D[2] = B[2] + C[2] * tmin;
 }
 
 double detectDirection(double *A, double *B, double *C)
@@ -148,9 +170,8 @@ double normVector(double *xyz)
   return sqrt(pow(xyz[0], 2) + pow(xyz[1], 2) + pow(xyz[2], 2));
 }
 
-void xyz2llh(double **xyz, double **llh)
+void xyz2llh(double *xyz, double *llh)
 {
-  int num;
   double a, eps, e, e2;
   double x, y, z;
   double rho2, dz, zdz, nh, slat, n, dz_new;
@@ -160,39 +181,37 @@ void xyz2llh(double **xyz, double **llh)
 
   eps = 1.0e-3;
   e2 = pow(e, 2);
-  for (num = 0; num < USER_MOTION; num++)
+  if (normVector(xyz) < eps)
   {
-    if (normVector(xyz[num]) < eps)
-    {
-      llh[num][0] = 0.0;
-      llh[num][1] = 0.0;
-      llh[num][2] = -a;
-      continue;
-    }
-    x = xyz[num][0];
-    y = xyz[num][1];
-    z = xyz[num][2];
-
-    rho2 = pow(x, 2) + pow(y, 2);
-    dz = e2 * z;
-    while (true)
-    {
-      zdz = z + dz;
-      nh = sqrt(rho2 + pow(zdz, 2));
-      slat = zdz / nh;
-      n = a / sqrt(1.0 - e2*pow(slat, 2));
-      dz_new = n*e2*slat;
-
-      if (fabs(dz - dz_new) < eps)
-      {
-        break;
-      }
-      dz = dz_new;
-    }
-    llh[num][0] = atan2(zdz, sqrt(rho2))*R2D;
-    llh[num][1] = atan2(y, x)*R2D;
-    llh[num][2] = (nh - n)*R2D;
+    llh[0] = 0.0;
+    llh[1] = 0.0;
+    llh[2] = -a;
+    return;
   }
+  x = xyz[0];
+  y = xyz[1];
+  z = xyz[2];
+
+  rho2 = pow(x, 2) + pow(y, 2);
+  dz = e2 * z;
+  while (true)
+  {
+    zdz = z + dz;
+    nh = sqrt(rho2 + pow(zdz, 2));
+    slat = zdz / nh;
+    n = a / sqrt(1.0 - e2*pow(slat, 2));
+    dz_new = n*e2*slat;
+
+    if (fabs(dz - dz_new) < eps)
+    {
+      break;
+    }
+    dz = dz_new;
+  }
+  llh[0] = atan2(zdz, sqrt(rho2))*R2D;
+  llh[1] = atan2(y, x)*R2D;
+  llh[2] = (nh - n);
+
   return;
 }
 
@@ -213,10 +232,10 @@ void llh2xyz(const double *llh, double *xyz)
   e = WGS84_ECCENTRICITY;
   e2 = e*e;
 
-  clat = cos(llh[0]);
-  slat = sin(llh[0]);
-  clon = cos(llh[1]);
-  slon = sin(llh[1]);
+  clat = cos(llh[0]/R2D);
+  slat = sin(llh[0]/R2D);
+  clon = cos(llh[1]/R2D);
+  slon = sin(llh[1]/R2D);
   d = e*slat;
 
   n = a/sqrt(1.0-d*d);
@@ -226,6 +245,10 @@ void llh2xyz(const double *llh, double *xyz)
   xyz[0] = tmp*clon;
   xyz[1] = tmp*slon;
   xyz[2] = ((1.0-e2)*n + llh[2])*slat;
+#ifdef DEBUG_SERVER
+  printf ("llh input    ---> %lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
+  printf ("xyz ouput    ---> %lf,%lf,%lf\n",xyz[0],xyz[1],xyz[2]);
+#endif
 
   return;
 }
@@ -468,11 +491,6 @@ TODO: Need a handshake protocol
   if (res < 0)
     return 0;
   int count = 0;
-#ifdef DEBUG
-  while(1)
-  {
-  }
-#else
   //Read 3 packages first
   while(count++ < 3)
   {
@@ -482,6 +500,9 @@ TODO: Need a handshake protocol
       PushBuff(tmp);
     }
   }
+  char *out = "/home/toannm/Desktop/GPSTEST/gpssim_server/out.csv";
+  FILE *ou; 
+  ou = fopen(out, "wb");
   while(1)
   {
     QNote *tmp = NULL;
@@ -493,154 +514,33 @@ TODO: Need a handshake protocol
       
      //Step1: Convert lat, lon, hgt to xyz and push to buffer
       PushBuff(tmp);
-     //Step2: Convert xyz to neu
-     // xyz2neu(
-      printf ("%lf,%lf,%lf,%lf,%lf,%lf\n",xyz6[2][0], xyz6[2][1], xyz6[2][2], xyz7[2][0], xyz7[2][1], xyz7[2][2]);
+     //Step2: Calculate 
+      double next[3] = {0.0,};
+      double llh[3] = {0.0,};
+      nextCoordinate(xyz7[1],xyz7[2],next);
+#ifdef DEBUG_SERVER
+      printf ("Raw xyz input:   --> %lf,%lf,%lf,%lf,%lf,%lf\n",xyz6[2][0], xyz6[2][1], xyz6[2][2], xyz7[2][0], xyz7[2][1], xyz7[2][2]);
+      printf ("Raw llh input:   --> %lf,%lf,%lf,%lf,%lf,%lf\n",llh6[2][0], llh6[2][1], llh6[2][2], llh7[2][0], llh7[2][1], llh7[2][2]);
+      printf ("first location:  --> %lf,%lf,%lf\n",xyz7[1][0],xyz7[1][1],xyz7[1][2]);
+      printf ("second location: --> %lf,%lf,%lf\n",xyz7[2][0],xyz7[2][1],xyz7[2][2]);
+      printf ("next location:   --> %lf,%lf,%lf\n",next[0],next[1],next[2]);
+#endif
+      xyz2llh(next,llh);
+      char buff[1 << 6];
+#ifdef DEBUG_SERVER
+      printf ("%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
+#endif
+      sprintf (buff,"%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
+      fwrite(buff, strlen(buff), 1 , ou);
     }
-  }
-#endif
-/**
-  FILE *in;
-  FILE *out;
-  FILE *out_llh;
-  FILE *out_neu;
-  FILE *out_llh_wrong;
-  double **xyz;
-  double **xyz_wrong;
-  double **llh;
-  double **neu;
-  double **neu_new;
-  double **llh_wrong;
-  float tp;
-  char *input_source = "/home/pi/simulator.csv";
-  char *output_source = "/home/pi/spoof.csv";
-  char *output_llh_source = "/home/pi/mout_llh.csv";
-  char *output_neu_source = "/home/pi/out_neu.csv";
-  char *output_llh_wrong = "/home/pi/spoof_llh.csv";
-  in = fopen(input_source, "r");
-  out = fopen(output_source, "wb");
-  out_llh = fopen(output_llh_source, "wb");
-  out_neu = fopen(output_neu_source, "wb");
-  out_llh_wrong = fopen(output_llh_wrong, "wb");
-  if (in == NULL)
-  {
-    printf("Can't open motion file. Exit!\n");
-    return 0;
-  }
-  //-->Read all line of user motion file and store into xyz
-  xyz = createBuff(USER_MOTION, 3);
-  readUserMotion(xyz, in);
-  //-->Convert all xyz coordinates to llh coordinates
-  llh = createBuff(USER_MOTION, 3);
-  xyz2llh(xyz, llh);
-  tp = 0.0;
-  for (int i = 0; i < USER_MOTION; i++)
-  {
-    char buff1[100];
-    sprintf(buff1, "  %.1f, %lf, %lf, %lf\n", tp, llh[i][0], llh[i][1], llh[i][2]);
-    fwrite(buff1, strlen(buff1), 1, out_llh);
-    tp = tp + (0.1 * 10) / 10.0;
-  }
-  //-->Convert all xyz coordinates to neu coordinates
-  neu = createBuff(USER_MOTION, 3);
-  xyz2neu(xyz, llh, neu);
-  tp = 0.0;
-  for (int i = 0; i < USER_MOTION; i++)
-  {
-    char buff1[100];
-    sprintf(buff1, "  %.1f, %lf, %lf, %lf\n", tp, neu[i][0], neu[i][1], neu[i][2]);
-    fwrite(buff1, strlen(buff1), 1, out_neu);
-    tp = tp + (0.1 * 10) / 10.0;
-  }
-  //-->Remove some reduant coordinates
-  //neu_new = createBuff(USER_MOTION, 3);
-  //rmReduantNeu(neu, neu_new);
-  //-->Calculate wrong coordinates from neu coordinates
-  xyz_wrong =createBuff(USER_MOTION, 3);
-  calWrongNeu(xyz_wrong, xyz, llh);
-  tp = 0.0;
-  for (int i = 0; i < USER_MOTION; i++)
-  {
-    char buff[100];
-    sprintf(buff, "  %.1f,%.3lf, %.3lf, %.3lf\n", tp, xyz_wrong[i][0], xyz_wrong[i][1], xyz_wrong[i][2]);
-    fwrite(buff, strlen(buff), 1, out);
-    tp = tp + (0.1*10)/10.0;    
-  }
-  llh_wrong = createBuff(USER_MOTION, 3);
-  xyz2llh(xyz_wrong, llh_wrong);
-  tp = 0.0;
-  for (int i = 0; i < USER_MOTION; i++)
-  {
-    char buff1[100];
-    sprintf(buff1, "  %.1f, %lf, %lf, %lf\n", tp, llh_wrong[i][0], llh_wrong[i][1], llh_wrong[i][2]);
-    fwrite(buff1, strlen(buff1), 1, out_llh_wrong);
-    tp = tp + (0.1 * 10) / 10.0;
-  }
-  //waiting client connect
-#ifdef _WIN32_
-  int len = sizeof(Caddr);
-  printf("Waiting client connect\n");
-#else
-//  struct sockaddr_in Caddr;
-//  int clen = sizeof(Caddr);
-#endif
-//  c = accept(s, (struct sockaddr *)&Caddr, &clen);
-  //-->send first xyz to calculate tmat, neu
-  printf("Success!\n");
-  char fist_mess[100];
-  char ok_mess[8];
-  sprintf(fist_mess, "%.3lf, %.3lf, %.3lf\n", llh_wrong[0][0], llh_wrong[0][1], llh_wrong[0][2]);
-//  ret = recv(c, ok_mess, sizeof(ok_mess), 0);
-//  if (ret == -1)
-//  {
-//    printf("Error 3!\n");
-//    return 0;
-//  }
-//  else
-//  {
-//    if (strcmp(ok_mess, "ok") == 0)
-//    {
-//      send(c, fist_mess, sizeof(fist_mess), 0);
-//    }
-//  }
-  //-->send data
-  FILE *fd;
-  char *myfifo = "/tmp/test";
-  //mkfifo (myfifo,0666);
-  fd = fopen(myfifo, "w");
-  for (int i = 0; i < USER_MOTION; i++)
-  {
-    char buff[100];
-    char ok[8];
-    sprintf(buff, "%.3lf, %.3lf, %.3lf\n", xyz_wrong[i][0], xyz_wrong[i][1], xyz_wrong[i][2]);
-    //printf("%s",buff);
-    fwrite(buff,strlen(buff),1,fd);
-//    ret = recv(c, ok, sizeof(ok), 0);
-//    if (ret == -1)
-//    {
-//      printf("Error 3!\n");
-//      return 0;
-//    }
 //    else
 //    {
-//      if (strncmp(ok, "OK",2) == 0)
-//      {
-//        //printf("%s\n", buff);
-//        send(c, buff, sizeof(buff), 0);
-//      }
+//#ifdef DEBUG
+//      printf ("Nope\n");
+//#endif
 //    }
   }
-  fclose(fd);
-  //unlink(myfifo);
-  //close(c);
-  fclose(in);
-  fclose(out);
-  fclose(out_llh);
-  fclose(out_neu);
-  fclose(out_llh_wrong);
-  //-->save coordinates
-  // _getch();
-/**/
   close(fd);
+
   return 0;
 }
