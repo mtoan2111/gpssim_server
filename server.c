@@ -115,7 +115,7 @@ double detectDirection(double *A, double *B, double *C)
   {
     cosABC = -1;
   }
-#ifdef DEBUG
+#ifdef DEBUG_SERVER
 {
 	printf("%lf \n", acos(cosABC) * R2D);
 }
@@ -456,7 +456,7 @@ int main(int argc, const char **argv)
   char tty[1<<4];
   strcpy(tty, argv[1]);
   fd = open (tty, O_RDWR | O_NOCTTY);
-#ifdef DEBUG  
+#ifdef DEBUG_SERVER  
   printf ("%d",fd);
 #endif
   if (fd < 0)
@@ -518,27 +518,19 @@ TODO: Need a handshake protocol
       double next[3] = {0.0,};
       double llh[3] = {0.0,};
       nextCoordinate(xyz7[1],xyz7[2],next);
+      xyz2llh(next,llh);
+      char buff[1 << 6];
 #ifdef DEBUG_SERVER
       printf ("Raw xyz input:   --> %lf,%lf,%lf,%lf,%lf,%lf\n",xyz6[2][0], xyz6[2][1], xyz6[2][2], xyz7[2][0], xyz7[2][1], xyz7[2][2]);
       printf ("Raw llh input:   --> %lf,%lf,%lf,%lf,%lf,%lf\n",llh6[2][0], llh6[2][1], llh6[2][2], llh7[2][0], llh7[2][1], llh7[2][2]);
       printf ("first location:  --> %lf,%lf,%lf\n",xyz7[1][0],xyz7[1][1],xyz7[1][2]);
       printf ("second location: --> %lf,%lf,%lf\n",xyz7[2][0],xyz7[2][1],xyz7[2][2]);
       printf ("next location:   --> %lf,%lf,%lf\n",next[0],next[1],next[2]);
-#endif
-      xyz2llh(next,llh);
-      char buff[1 << 6];
-#ifdef DEBUG_SERVER
-      printf ("%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
+      printf ("next location    -->%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
 #endif
       sprintf (buff,"%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
       fwrite(buff, strlen(buff), 1 , ou);
     }
-//    else
-//    {
-//#ifdef DEBUG
-//      printf ("Nope\n");
-//#endif
-//    }
   }
   close(fd);
 
