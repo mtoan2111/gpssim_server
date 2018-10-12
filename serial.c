@@ -73,7 +73,7 @@ int SerialRead(serial *tty,char *buff, int size)
 static void UART_IRQ(char *buff)
 {
   llh tmp;
-  sscanf(buff,"%lf,%lf,%lf,%lf,%lf,%lf",&tmp.lat6, &tmp.lon6, &tmp.alt6, &tmp.lat7, &tmp.lon7, &tmp.alt7);
+  sscanf(buff,"%lf,%lf,%lf,%lf",&tmp.lat6, &tmp.lon6/*, &tmp.alt6*/, &tmp.lat7, &tmp.lon7/*, &tmp.alt7*/);
   tmp.alt6 = 15;
   tmp.alt7 = 15;
   enQueue(q, tmp);

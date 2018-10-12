@@ -526,7 +526,7 @@ TODO: Need a handshake protocol
       printf ("first location:  --> %lf,%lf,%lf\n",xyz7[1][0],xyz7[1][1],xyz7[1][2]);
       printf ("second location: --> %lf,%lf,%lf\n",xyz7[2][0],xyz7[2][1],xyz7[2][2]);
       printf ("next location:   --> %lf,%lf,%lf\n",next[0],next[1],next[2]);
-      printf ("next location    -->%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
+      printf ("next location    --> %lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
 #endif
       sprintf (buff,"%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
       fwrite(buff, strlen(buff), 1 , ou);
