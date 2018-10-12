@@ -43,7 +43,8 @@ double llh6[3][3];
 double llh7[3][3];
 double neu6[3][3];
 double neu7[3][3];
-
+double wxyz7[3][3];
+int frame;
 
 void error(char *msg)
 {
@@ -246,8 +247,8 @@ void llh2xyz(const double *llh, double *xyz)
   xyz[1] = tmp*slon;
   xyz[2] = ((1.0-e2)*n + llh[2])*slat;
 #ifdef DEBUG_SERVER
-  printf ("llh input    ---> %lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
-  printf ("xyz ouput    ---> %lf,%lf,%lf\n",xyz[0],xyz[1],xyz[2]);
+  printf ("llh input        ---> %lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
+  printf ("xyz ouput        ---> %lf,%lf,%lf\n",xyz[0],xyz[1],xyz[2]);
 #endif
 
   return;
@@ -307,16 +308,16 @@ void rmReduantNeu(double **neu, double **neu_new)
   }
 }
 
-void calWrongNeu( double **xyz_wrong, double **xyz, double **llh)
+void calWrongNeu( double xyz_wrong[3][3], double xyz[3][3], double llh[3][3])
 {
   int num;
   double velocity, tm;
   double t[3][3];
   double neu[3];
-  velocity = V_MAX;
+  velocity = 200;
   tm = 0.1;
   tmat(llh[0], t);
-  for (num = 0; num < USER_MOTION; num++)
+  for (num = 0; num < 3; num++)
   {
     neu[0] = 0;
     neu[1] = 0;
@@ -508,16 +509,17 @@ TODO: Need a handshake protocol
     QNote *tmp = NULL;
     if ((tmp = deQueue(q)) != NULL)
     {
-     /*
-      Capture data and calculating...
-     */
+      /*
+       Capture data and calculating...
+      */
       
-     //Step1: Convert lat, lon, hgt to xyz and push to buffer
+      //Step1: Convert lat, lon, hgt to xyz and push to buffer
       PushBuff(tmp);
-     //Step2: Calculate 
+      //Step2: Calculate 
       double next[3] = {0.0,};
       double llh[3] = {0.0,};
-      nextCoordinate(xyz7[1],xyz7[2],next);
+      calWrongNeu(wxyz7,xyz7,llh7);
+      nextCoordinate(wxyz7[1],wxyz7[2],next);
       xyz2llh(next,llh);
       char buff[1 << 6];
 #ifdef DEBUG_SERVER
@@ -528,8 +530,11 @@ TODO: Need a handshake protocol
       printf ("next location:   --> %lf,%lf,%lf\n",next[0],next[1],next[2]);
       printf ("next location    --> %lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
 #endif
+      frame++;
+      fprintf(stderr,"\rProcessing frame: %d", frame);
       sprintf (buff,"%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
       fwrite(buff, strlen(buff), 1 , ou);
+      fflush(stdout);
     }
   }
   close(fd);
