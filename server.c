@@ -22,6 +22,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #endif
 
@@ -88,14 +89,14 @@ void velVector(double *A, double *B, double *C)
   C[2] *= sV/n;
 }
 
-void nextCoordinate(double *A, double *B, double *D)
+void nextCoordinate(double *A, double *B, double *D, int step)
 {
   double tmin = 0.1;
   double C[3];
   velVector(A, B, C);
-  D[0] = B[0] + C[0] * tmin;
-  D[1] = B[1] + C[1] * tmin;
-  D[2] = B[2] + C[2] * tmin;
+  D[0] = B[0] + C[0] * tmin * step;
+  D[1] = B[1] + C[1] * tmin * step;
+  D[2] = B[2] + C[2] * tmin * step;
 }
 
 double detectDirection(double *A, double *B, double *C)
@@ -504,6 +505,9 @@ TODO: Need a handshake protocol
   char *out = "/home/toannm/Desktop/GPSTEST/gpssim_server/out.csv";
   FILE *ou; 
   ou = fopen(out, "wb");
+  clock_t start, end;
+  double time_used;
+  int step = 0;
   while(1)
   {
     QNote *tmp = NULL;
@@ -514,14 +518,16 @@ TODO: Need a handshake protocol
       */
       
       //Step1: Convert lat, lon, hgt to xyz and push to buffer
+      start = clock();
       PushBuff(tmp);
       //Step2: Calculate 
       double next[3] = {0.0,};
       double llh[3] = {0.0,};
       calWrongNeu(wxyz7,xyz7,llh7);
-      nextCoordinate(wxyz7[1],wxyz7[2],next);
+      step = 1;
+      nextCoordinate(wxyz7[1],wxyz7[2],next,step);
       xyz2llh(next,llh);
-      char buff[1 << 6];
+      char buff[1 << 6] = {0,};
 #ifdef DEBUG_SERVER
       printf ("Raw xyz input:   --> %lf,%lf,%lf,%lf,%lf,%lf\n",xyz6[2][0], xyz6[2][1], xyz6[2][2], xyz7[2][0], xyz7[2][1], xyz7[2][2]);
       printf ("Raw llh input:   --> %lf,%lf,%lf,%lf,%lf,%lf\n",llh6[2][0], llh6[2][1], llh6[2][2], llh7[2][0], llh7[2][1], llh7[2][2]);
@@ -532,6 +538,26 @@ TODO: Need a handshake protocol
 #endif
       frame++;
       fprintf(stderr,"\rProcessing frame: %d", frame);
+      sprintf (buff,"%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
+      fwrite(buff, strlen(buff), 1 , ou);
+      fflush(stdout);
+    }
+    end = clock();
+    time_used = (double)(end - start)/(CLOCKS_PER_SEC/1000);
+    if (time_used > 70)
+    {
+      /*
+      Interpolate next location if data doesn't come on time.
+      */
+      step++;
+      double next[3] = {0.0,};
+      double llh[3] = {0.0,};
+      nextCoordinate(wxyz7[1],wxyz7[2], next, step);
+      start = clock();
+      xyz2llh(next,llh);
+      frame++;
+      char buff[1 << 6] = {0,};
+      fprintf(stderr,"\n\rProcessing frame(Missing Data Mode): %d", frame);
       sprintf (buff,"%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
       fwrite(buff, strlen(buff), 1 , ou);
       fflush(stdout);
