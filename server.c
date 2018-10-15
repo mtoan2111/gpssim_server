@@ -74,9 +74,7 @@ void genImLocation(FILE *fd, double A[3], double B[3], int num)
   C[0] = B[0] - A[0];
   C[1] = B[1] - A[1];
   C[2] = B[2] - A[2];
-  printf ("A interpolcating --> %lf,%lf,%lf\n",A[0],A[1],A[2]);
-  printf ("B interpolcating --> %lf,%lf,%lf\n",B[0],B[1],B[2]);
- double D[3] = {0.0,};
+  double D[3] = {0.0,};
   for (int i = 1; i < num; i++)
   {
     D[0] = A[0] + C[0] * i / num;
@@ -85,7 +83,6 @@ void genImLocation(FILE *fd, double A[3], double B[3], int num)
     double llh7_t[3] = {0.0,};
     xyz2llh(D,llh7_t);
     Pushllh7(llh7_t, 1, D);
-    printf ("llh interpolcating --> %lf,%lf,%lf\n",llh7_t[0],llh7_t[1],llh7_t[2]);
     frame++;
     fprintf(stderr,"\nProcessing frame (Interpolating Data Mode)   : %d", frame);
     write2file(fd,llh7_t);
@@ -605,7 +602,7 @@ TODO: Need a handshake protocol
           int nPoint = range / (V_MAX * 0.1);
           printf (" %d\n", nPoint);
           //if the range is far enough --> ignore
-          genImLocation(ou,lxyz7,llh7_t,nPoint);
+          genImLocation(ou,lxyz7,xyz7_t,nPoint);
           printf ("Done\n");
         }
       }
