@@ -596,14 +596,11 @@ TODO: Need a handshake protocol
         //Need to generate some immediate location
         double range;
         range = calDistance(xyz7_t,lxyz7);
-        printf (" %lf -->", range);
         if (range < 1800)
         {
           int nPoint = range / (V_MAX * 0.1);
-          printf (" %d\n", nPoint);
           //if the range is far enough --> ignore
           genImLocation(ou,lxyz7,xyz7_t,nPoint);
-          printf ("Done\n");
         }
       }
       Pushllh6(llh6_t, -1, xyz6_t);
