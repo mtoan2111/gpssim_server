@@ -28,24 +28,7 @@
 
 #include "serial.h"
 #include <termios.h>
-
-int USER_MOTION = 3;
-
-#define MAX_LEN 100
-#define WGS84_RADIUS 6378137.0
-#define WGS84_ECCENTRICITY 0.0818191908426
-#define V_MAX 4.17 //m/s ~ 15 km/h
-#define R2D 57.2957795131
-
-
-double xyz6[3][3];
-double xyz7[3][3];
-double llh6[3][3];
-double llh7[3][3];
-double neu6[3][3];
-double neu7[3][3];
-double wxyz7[3][3];
-int frame;
+#include "server.h"
 
 void error(char *msg)
 {
@@ -59,6 +42,14 @@ void subVect(double *A1, double *A2, double *result)
   result[0] = A1[0] - A2[0];
   result[1] = A1[1] - A2[1];
   result[2] = A1[2] - A2[2];
+}
+
+void write2file(FILE *fd, double A[3])
+{
+  char buff[1 << 6] = {0,};
+  sprintf (buff,"%lf,%lf,%lf\n",A[0],A[1],A[2]);
+  fwrite(buff, strlen(buff), 1 , fd);
+  return;
 }
 
 bool isSimillar(double *A, double *B)
@@ -75,6 +66,31 @@ bool isSimillar(double *A, double *B)
 double normVect(double *A)
 {
   return sqrt(pow(A[0], 2) + pow(A[1], 2) + pow(A[2], 2));
+}
+
+void genImLocation(FILE *fd, double A[3], double B[3], int num)
+{
+  double C[3] = {0.0,};
+  C[0] = B[0] - A[0];
+  C[1] = B[1] - A[1];
+  C[2] = B[2] - A[2];
+  printf ("A interpolcating --> %lf,%lf,%lf\n",A[0],A[1],A[2]);
+  printf ("B interpolcating --> %lf,%lf,%lf\n",B[0],B[1],B[2]);
+ double D[3] = {0.0,};
+  for (int i = 1; i < num; i++)
+  {
+    D[0] = A[0] + C[0] * i / num;
+    D[1] = A[1] + C[1] * i / num;
+    D[2] = A[2] + C[2] * i / num;
+    double llh7_t[3] = {0.0,};
+    xyz2llh(D,llh7_t);
+    Pushllh7(llh7_t, 1, D);
+    printf ("llh interpolcating --> %lf,%lf,%lf\n",llh7_t[0],llh7_t[1],llh7_t[2]);
+    frame++;
+    fprintf(stderr,"\nProcessing frame (Interpolating Data Mode)   : %d", frame);
+    write2file(fd,llh7_t);
+  }
+  return;
 }
 
 void velVector(double *A, double *B, double *C)
@@ -167,10 +183,10 @@ void readUserMotion(double **xyz, FILE *fp)
   return;
 }
 
-double normVector(double *xyz)
-{
-  return sqrt(pow(xyz[0], 2) + pow(xyz[1], 2) + pow(xyz[2], 2));
-}
+//double normVector(double *xyz)
+//{
+//  return sqrt(pow(xyz[0], 2) + pow(xyz[1], 2) + pow(xyz[2], 2));
+//}
 
 void xyz2llh(double *xyz, double *llh)
 {
@@ -183,7 +199,7 @@ void xyz2llh(double *xyz, double *llh)
 
   eps = 1.0e-3;
   e2 = pow(e, 2);
-  if (normVector(xyz) < eps)
+  if (normVect(xyz) < eps)
   {
     llh[0] = 0.0;
     llh[1] = 0.0;
@@ -274,6 +290,11 @@ void tmat(double *llh, double t[3][3])
   t[2][0] = clat * clon;
   t[2][1] = clat * slon;
   t[2][2] = slat;
+}
+
+double calDistance(double A[3], double B[3])
+{
+  return sqrt(pow((B[0] - A[0]), 2) + pow((B[1] - A[1]), 2) + pow((B[2] - A[2]),2));
 }
 
 double calculateSpeed(double *neu1, double *neu2)
@@ -401,24 +422,45 @@ void ReplaceData(double A[3], double B[3])
   A[2] = B[2];
 }
 
-void PushBuff(QNote *tmp)
+void InsertData(double A[3][3])
 {
-  ReplaceData(llh6[0], llh6[1]);
-  ReplaceData(llh6[1], llh6[2]);
-  ReplaceData(llh7[0], llh7[1]);
-  ReplaceData(llh7[1], llh7[2]);
-  ReplaceData(xyz6[0], xyz6[1]);
-  ReplaceData(xyz6[1], xyz6[2]);
-  ReplaceData(xyz7[0], xyz7[1]);
-  ReplaceData(xyz7[1], xyz7[2]);
-  llh6[2][0] = tmp->data.lat6;
-  llh6[2][1] = tmp->data.lon6;
-  llh6[2][2] = tmp->data.alt6;
-  llh7[2][0] = tmp->data.lat7;
-  llh7[2][1] = tmp->data.lon7;
-  llh7[2][2] = tmp->data.alt7;
-  llh2xyz(llh6[2],xyz6[2]);
-  llh2xyz(llh7[2],xyz7[2]);
+  ReplaceData(A[0],A[1]);
+  ReplaceData(A[1],A[2]);
+}
+
+void Pushllh6(double llh[3], int isXyzExist, double xyz[3])
+{
+  InsertData(llh6);
+  InsertData(xyz6);
+  llh6[2][0] = llh[0];
+  llh6[2][1] = llh[1];
+  llh6[2][2] = llh[2];
+  if (isXyzExist < 0)
+    llh2xyz(llh6[2],xyz6[2]);
+  else
+  {
+    xyz6[2][0] = xyz[0];
+    xyz6[2][1] = xyz[1];
+    xyz6[2][2] = xyz[2];
+  }
+}
+
+void Pushllh7(double tmp[3], int isXyzExist, double xyz[3])
+{
+  InsertData(llh7);
+  InsertData(xyz7);
+  llh7[2][0] = tmp[0];
+  llh7[2][1] = tmp[1];
+  llh7[2][2] = tmp[2];
+  if (isXyzExist < 0)
+    llh2xyz(llh7[2],xyz7[2]);
+  else
+  {
+    xyz7[2][0] = xyz[0];
+    xyz7[2][1] = xyz[1];
+    xyz7[2][2] = xyz[2];
+  }
+
 }
 
 int main(int argc, const char **argv)
@@ -473,6 +515,7 @@ int main(int argc, const char **argv)
   if(ConfigSerialPort(fd,B115200,0) != 0)
     return 0;
   q = createQueue();
+  q1 = createQueue();
   pthread_t tThread; 
   serial my_tty = {
     .fd = fd,
@@ -485,7 +528,7 @@ TODO: Need a handshake protocol
 */
   ByteRate(fd,1);
   printf ("Handshaking....\n");
-  HandShake(fd); 
+//  HandShake(fd); 
   printf ("Handshake succeed\n");
   //......
   ByteRate(fd,61);
@@ -494,18 +537,32 @@ TODO: Need a handshake protocol
     return 0;
   int count = 0;
   //Read 3 packages first
-  while(count++ < 3)
+  while(count < 3)
   {
     QNote *tmp = NULL;
     if ((tmp = deQueue(q)) != NULL)
     {
-      PushBuff(tmp);
+      double llh6_t[3] = {0.0,};
+      double xyz6_t[3] = {0.0,};
+      llh6_t[0] = tmp->data.lat6;
+      llh6_t[1] = tmp->data.lon6;
+      llh6_t[2] = tmp->data.alt6;
+      Pushllh6(llh6_t, -1, xyz6_t);
+
+      double llh7_t[3] = {0.0,};
+      double xyz7_t[3] = {0.0,};
+      llh7_t[0] = tmp->data.lat7;
+      llh7_t[1] = tmp->data.lon7;
+      llh7_t[2] = tmp->data.alt7;
+      Pushllh7(llh7_t, -1, xyz7_t);
+      count++;
     }
   }
   char *out = "/home/toannm/Desktop/GPSTEST/gpssim_server/out.csv";
   FILE *ou; 
   ou = fopen(out, "wb");
-  clock_t start, end;
+  clock_t start = 0;
+  clock_t end = 0;
   double time_used;
   int step = 0;
   while(1)
@@ -516,18 +573,53 @@ TODO: Need a handshake protocol
       /*
        Capture data and calculating...
       */
-      
       //Step1: Convert lat, lon, hgt to xyz and push to buffer
+#ifdef DEBUG_SERVER
+      printf("Start\n");
+#endif
       start = clock();
-      PushBuff(tmp);
-      //Step2: Calculate 
+      double llh6_t[3] = {0.0,};
+      double xyz6_t[3] = {0.0,};
+      llh6_t[0] = tmp->data.lat6;
+      llh6_t[1] = tmp->data.lon6;
+      llh6_t[2] = tmp->data.alt6;
+
+      double llh7_t[3] = {0.0,};
+      double xyz7_t[3] = {0.0,};
+      llh7_t[0] = tmp->data.lat7;
+      llh7_t[1] = tmp->data.lon7;
+      llh7_t[2] = tmp->data.alt7;
+      llh2xyz(llh7_t,xyz7_t);
+           //Step2: Calculate
+#ifdef DEBUG_SERVER
+      printf ("calculatating wrong location\n");
+#endif
+      if (step > 5)
+      {
+        //Need to generate some immediate location
+        double range;
+        range = calDistance(xyz7_t,lxyz7);
+        printf (" %lf -->", range);
+        if (range < 1800)
+        {
+          int nPoint = range / (V_MAX * 0.1);
+          printf (" %d\n", nPoint);
+          //if the range is far enough --> ignore
+          genImLocation(ou,lxyz7,llh7_t,nPoint);
+          printf ("Done\n");
+        }
+      }
+      Pushllh6(llh6_t, -1, xyz6_t);
+      Pushllh7(llh7_t, -1, xyz7_t);
       double next[3] = {0.0,};
       double llh[3] = {0.0,};
       calWrongNeu(wxyz7,xyz7,llh7);
       step = 1;
+#ifdef DEBUG_SERVER
+      printf ("calculating next location\n");
+#endif
       nextCoordinate(wxyz7[1],wxyz7[2],next,step);
       xyz2llh(next,llh);
-      char buff[1 << 6] = {0,};
 #ifdef DEBUG_SERVER
       printf ("Raw xyz input:   --> %lf,%lf,%lf,%lf,%lf,%lf\n",xyz6[2][0], xyz6[2][1], xyz6[2][2], xyz7[2][0], xyz7[2][1], xyz7[2][2]);
       printf ("Raw llh input:   --> %lf,%lf,%lf,%lf,%lf,%lf\n",llh6[2][0], llh6[2][1], llh6[2][2], llh7[2][0], llh7[2][1], llh7[2][2]);
@@ -537,30 +629,33 @@ TODO: Need a handshake protocol
       printf ("next location    --> %lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
 #endif
       frame++;
-      fprintf(stderr,"\rProcessing frame: %d", frame);
-      sprintf (buff,"%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
-      fwrite(buff, strlen(buff), 1 , ou);
-      fflush(stdout);
+      fprintf(stderr,"\rProcessing frame (Normal Data Mode)          : %d", frame);
+      write2file(ou,llh);
     }
-    end = clock();
-    time_used = (double)(end - start)/(CLOCKS_PER_SEC/1000);
-    if (time_used > 70)
+    if (start != 0)
     {
-      /*
-      Interpolate next location if data doesn't come on time.
-      */
-      step++;
-      double next[3] = {0.0,};
-      double llh[3] = {0.0,};
-      nextCoordinate(wxyz7[1],wxyz7[2], next, step);
-      start = clock();
-      xyz2llh(next,llh);
-      frame++;
-      char buff[1 << 6] = {0,};
-      fprintf(stderr,"\n\rProcessing frame(Missing Data Mode): %d", frame);
-      sprintf (buff,"%lf,%lf,%lf\n",llh[0],llh[1],llh[2]);
-      fwrite(buff, strlen(buff), 1 , ou);
-      fflush(stdout);
+      end = clock();
+      time_used = (double)(end - start)/(CLOCKS_PER_SEC/1000);
+      
+      if (time_used > 70)
+      {
+        /*
+        Interpolate next location if data doesn't come on time.
+        */
+        step++;
+        double next[3] = {0.0,};
+        double llh[3] = {0.0,};
+        nextCoordinate(wxyz7[1],wxyz7[2], next, step);
+        start = clock();
+        xyz2llh(next,llh);
+        Pushllh7(llh, 1, next);
+        lxyz7[0] = next[0];
+        lxyz7[1] = next[1];
+        lxyz7[2] = next[2];
+        frame++;
+        fprintf(stderr,"\rProcessing frame (Missing Data Mode)         : %d", frame);
+        write2file(ou,llh);
+      }
     }
   }
   close(fd);
