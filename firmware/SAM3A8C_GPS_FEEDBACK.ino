@@ -37,14 +37,14 @@ const unsigned char ublox_GNSS[] = {
 
 int handshake()
 {
-  digitalWrite(12,1);
+  digitalWrite(12,state);
   state = !state;
   if (SerialUSB.available() > 0)
   {
     if (SerialUSB.read() == 'U')
     {
       SerialUSB.write(0x55);
-      digitalWrite(12,0);
+      digitalWrite(12,state);
       return 1;
     }
     return 0;
@@ -72,11 +72,11 @@ void cfg_ublox()
     Serial1.write(ublox_cfg[i]);
     Serial2.write(ublox_rate[i]);
   }
-//  delay(300);
-//  for (int i = 0; i < gSize; i++)
-//  {
-//    Serial2.write(ublox_GNSS[i]);
-//  }
+  delay(300);
+  for (int i = 0; i < gSize; i++)
+  {
+    Serial2.write(ublox_GNSS[i]);
+  }
   delay(300);
   //Config baudrate
   for (int i = 0; i < bRate; i++)
